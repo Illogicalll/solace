@@ -212,34 +212,6 @@ class _MainAppState extends State<MainApp> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SvgPicture.asset(
-                            'assets/icons/star.svg',
-                            width: 18,
-                            height: 18,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 5),
-                          const Text(
-                            'high score: 12345',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          SvgPicture.asset(
-                            'assets/icons/star.svg',
-                            width: 18,
-                            height: 18,
-                            color: Colors.white,
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
