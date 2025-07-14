@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:solace/logic.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class DragData {
   final CardModel card;
@@ -17,20 +20,135 @@ class PlayPage extends StatefulWidget {
   State<PlayPage> createState() => _PlayPageState();
 }
 
-class _PlayPageState extends State<PlayPage> {
-  late SolitaireGame game;
+class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
+  SolitaireGame? _game;
   int? _draggingPileIndex;
   int? _draggingCardIndex;
   bool _isDragging = false;
 
+  int _moveCount = 0;
+  late DateTime _startTime;
+  Duration _elapsed = Duration.zero;
+  DateTime? _pauseTime;
+  Ticker? _ticker;
+
   @override
   void initState() {
     super.initState();
-    game = SolitaireGame();
+    WidgetsBinding.instance.addObserver(this);
+    _moveCount = 0;
+    _startTime = DateTime.now();
+    _elapsed = Duration.zero;
+    _ticker = Ticker(_updateTimer);
+    _restoreGameState();
+  }
+
+  @override
+  void dispose() {
+    _saveGameState();
+    _pauseTimer();
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || 
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _pauseTimer();
+      _saveGameState();
+    } else if (state == AppLifecycleState.resumed) {
+      _resumeTimer();
+    }
+  }
+
+  void _pauseTimer() {
+    _ticker?.stop();
+    _pauseTime = DateTime.now();
+  }
+
+  void _resumeTimer() {
+    if (_pauseTime != null) {
+      final pauseDuration = DateTime.now().difference(_pauseTime!);
+      _startTime = _startTime.add(pauseDuration);
+      _pauseTime = null;
+    }
+    _ticker?.start();
+  }
+
+  Future<void> _restoreGameState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('solace_game_state');
+    final moveCount = prefs.getInt('solace_move_count');
+    final elapsedMillis = prefs.getInt('solace_elapsed_time');
+
+    if (saved != null) {
+      setState(() {
+        _game = SolitaireGame.fromJson(jsonDecode(saved));
+        _moveCount = moveCount ?? 0;
+        if (elapsedMillis != null) {
+          _elapsed = Duration(milliseconds: elapsedMillis);
+          _startTime = DateTime.now().subtract(_elapsed);
+        } else {
+          _startTime = DateTime.now();
+          _elapsed = Duration.zero;
+        }
+      });
+    } else {
+      setState(() {
+        _game = SolitaireGame();
+        _startTime = DateTime.now();
+        _elapsed = Duration.zero;
+      });
+    }
+    _ticker?.start();
+  }
+
+  Future<void> _saveGameState() async {
+    if (_game != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('solace_game_state', jsonEncode(_game!.toJson()));
+      await prefs.setInt('solace_move_count', _moveCount);
+      await prefs.setInt('solace_elapsed_time', _elapsed.inMilliseconds);
+    }
+  }
+
+  Future<void> _clearGameState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('solace_game_state');
+    await prefs.remove('solace_move_count');
+    await prefs.remove('solace_elapsed_time');
+  }
+
+  void _updateTimer(Duration _) {
+    setState(() {
+      _elapsed = DateTime.now().difference(_startTime);
+    });
+  }
+
+  void _incrementMove() {
+    setState(() {
+      _moveCount++;
+    });
+    _saveGameState();
+  }
+
+  void _resetGame() {
+    setState(() {
+      _game = SolitaireGame();
+      _moveCount = 0;
+      _startTime = DateTime.now();
+      _elapsed = Duration.zero;
+      _pauseTime = null;
+    });
+    _clearGameState();
+    _ticker?.start();
   }
 
   void _checkWin() {
-    if (game.isWin()) {
+    if (_game != null && _game!.isWin()) {
       Future.microtask(() {
         showDialog(
           context: context,
@@ -42,9 +160,7 @@ class _PlayPageState extends State<PlayPage> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  setState(() {
-                    game.init();
-                  });
+                  _resetGame();
                 },
                 child: const Text('Play Again'),
               ),
@@ -57,19 +173,52 @@ class _PlayPageState extends State<PlayPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_game == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    String timerText =
+        '${_elapsed.inMinutes.toString().padLeft(2, '0')}:${(_elapsed.inSeconds % 60).toString().padLeft(2, '0')}';
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Play'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 90,
+              child: Text(
+                'Moves: $_moveCount',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 34),
+            SizedBox(
+              width: 90,
+              child: Text(
+                'Time: $timerText',
+                textAlign: TextAlign.left,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  overflow: TextOverflow.visible,
+                ),
+              ),
+            ),
+          ],
+        ),
+        centerTitle: true,
         backgroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {
-                game.init();
-              });
-            },
+            onPressed: _resetGame,
           )
         ],
       ),
@@ -99,14 +248,15 @@ class _PlayPageState extends State<PlayPage> {
     return GestureDetector(
       onTap: () {
         setState(() {
-          game.drawFromStock();
+          _game!.drawFromStock();
+          _incrementMove();
           _checkWin();
         });
       },
       child: SizedBox(
         width: 58,
         height: 78,
-        child: game.stock.isEmpty
+        child: _game!.stock.isEmpty
             ? Container(
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.white30),
@@ -119,16 +269,16 @@ class _PlayPageState extends State<PlayPage> {
   }
 
   Widget _buildWaste() {
-    final isDraggingWasteTop = game.waste.isNotEmpty &&
+    final isDraggingWasteTop = _game!.waste.isNotEmpty &&
       _isDragging &&
       _draggingPileIndex == -2 &&
       _draggingCardIndex == -1 &&
-      game.waste.last == (game.waste.isNotEmpty ? game.waste.last : null);
+      _game!.waste.last == (_game!.waste.isNotEmpty ? _game!.waste.last : null);
 
     return SizedBox(
       width: 58,
       height: 78,
-      child: game.waste.isEmpty
+      child: _game!.waste.isEmpty
           ? Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.white30),
@@ -138,9 +288,9 @@ class _PlayPageState extends State<PlayPage> {
           : Stack(
               children: [
                 // Show the next card in the waste if dragging the top card
-                if (isDraggingWasteTop && game.waste.length > 1)
-                  _buildCard(game.waste[game.waste.length - 2]),
-                if (isDraggingWasteTop && game.waste.length == 1)
+                if (isDraggingWasteTop && _game!.waste.length > 1)
+                  _buildCard(_game!.waste[_game!.waste.length - 2]),
+                if (isDraggingWasteTop && _game!.waste.length == 1)
                   Container(
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.white30),
@@ -149,10 +299,10 @@ class _PlayPageState extends State<PlayPage> {
                   ),
                 if (!isDraggingWasteTop)
                   Draggable<CardModel>(
-                    data: game.waste.last,
-                    feedback: _buildCard(game.waste.last),
+                    data: _game!.waste.last,
+                    feedback: _buildCard(_game!.waste.last),
                     childWhenDragging: Container(),
-                    child: _buildCard(game.waste.last),
+                    child: _buildCard(_game!.waste.last),
                     onDragStarted: () {
                       setState(() {
                         _draggingPileIndex = -2; // -2 for waste
@@ -188,13 +338,12 @@ class _PlayPageState extends State<PlayPage> {
   }
 
   Widget _buildFoundation(int index) {
-    List<CardModel> pile = game.foundations[index];
-    // Only show next card if dragging from this foundation
+    List<CardModel> pile = _game!.foundations[index];
     final isDraggingThisFoundation = pile.isNotEmpty &&
       _isDragging &&
       _draggingPileIndex == index &&
       _draggingCardIndex == -1 &&
-      pile.last == (game.foundations[index].isNotEmpty ? game.foundations[index].last : null);
+      pile.last == (_game!.foundations[index].isNotEmpty ? _game!.foundations[index].last : null);
 
     return DragTarget<Object>(
       onWillAccept: (data) {
@@ -205,33 +354,32 @@ class _PlayPageState extends State<PlayPage> {
         } else if (data is DragData) {
           card = data.card;
           if (data.pileIndex >= 0) {
-            final movingCards = game.tableau[data.pileIndex].sublist(data.cardIndex);
+            final movingCards = _game!.tableau[data.pileIndex].sublist(data.cardIndex);
             if (movingCards.length > 1) return false;
           }
           if (data.pileIndex == -1) return false;
         } else {
           return false;
         }
-        return game.canPlaceOnFoundation(card, pile);
+        return _game!.canPlaceOnFoundation(card, pile);
       },
       onAccept: (data) {
         setState(() {
           if (data is CardModel) {
-            // Check if from waste
-            if (game.waste.isNotEmpty && game.waste.last == data) {
-              game.moveWasteToFoundation(index);
+            if (_game!.waste.isNotEmpty && _game!.waste.last == data) {
+              _game!.moveWasteToFoundation(index);
             } else {
-              // From tableau
               for (int i = 0; i < 7; i++) {
-                if (game.tableau[i].contains(data)) {
-                  game.moveTableauToFoundation(i, index);
+                if (_game!.tableau[i].contains(data)) {
+                  _game!.moveTableauToFoundation(i, index);
                   break;
                 }
               }
             }
           } else if (data is DragData) {
-            game.moveTableauToFoundation(data.pileIndex, index);
+            _game!.moveTableauToFoundation(data.pileIndex, index);
           }
+          _incrementMove();
           _checkWin();
         });
       },
@@ -320,7 +468,7 @@ class _PlayPageState extends State<PlayPage> {
   }
 
   Widget _buildTableauPile(int index, {double width = 60}) {
-    final pile = game.tableau[index];
+    final pile = _game!.tableau[index];
 
     return DragTarget<Object>(
       onWillAccept: (data) {
@@ -333,32 +481,30 @@ class _PlayPageState extends State<PlayPage> {
         } else {
           return false;
         }
-        return game.canPlaceOnTableau(card, pile.isNotEmpty ? pile.last : null);
+        return _game!.canPlaceOnTableau(card, pile.isNotEmpty ? pile.last : null);
       },
       onAcceptWithDetails: (details) {
         final data = details.data;
         setState(() {
           if (data is DragData) {
             if (data.pileIndex == -1) {
-              // From foundation
-              game.moveFoundationToTableau(data.card, index);
+              _game!.moveFoundationToTableau(data.card, index);
             } else {
-              game.moveTableauToTableau(data.pileIndex, data.cardIndex, index);
+              _game!.moveTableauToTableau(data.pileIndex, data.cardIndex, index);
             }
           } else if (data is CardModel) {
-            // Check if moving from tableau
             for (int i = 0; i < 7; i++) {
-              if (game.tableau[i].contains(data)) {
-                final cardIndex = game.tableau[i].indexOf(data);
-                game.moveTableauToTableau(i, cardIndex, index);
+              if (_game!.tableau[i].contains(data)) {
+                final cardIndex = _game!.tableau[i].indexOf(data);
+                _game!.moveTableauToTableau(i, cardIndex, index);
                 return;
               }
             }
-            // Else from waste
-            if (game.waste.isNotEmpty && game.waste.last == data) {
-              game.moveWasteToTableau(index);
+            if (_game!.waste.isNotEmpty && _game!.waste.last == data) {
+              _game!.moveWasteToTableau(index);
             }
           }
+          _incrementMove();
           _checkWin();
         });
       },
@@ -442,9 +588,8 @@ class _PlayPageState extends State<PlayPage> {
   }
 
   Widget _buildMultiCardFeedback(int pileIndex, int cardIndex) {
-    final pile = game.tableau[pileIndex];
+    final pile = _game!.tableau[pileIndex];
     final movingCards = pile.sublist(cardIndex);
-    
     return SizedBox(
       width: 60,
       height: 80 + (movingCards.length - 1) * 32,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'play.dart';
 import 'statistics.dart';
 
@@ -115,10 +116,19 @@ class _MainAppState extends State<MainApp> {
                               return Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 6.0),
                                 child: GestureDetector(
-                                  onTap: () {
+                                  onTap: () async {
                                     switch (option['title']) {
                                       case 'resume':
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => const PlayPage()),
+                                        );
+                                        break;
                                       case 'start':
+                                        final prefs = await SharedPreferences.getInstance();
+                                        await prefs.remove('solace_game_state');
+                                        await prefs.remove('solace_move_count');
+                                        await prefs.remove('solace_elapsed_time');
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(builder: (context) => const PlayPage()),

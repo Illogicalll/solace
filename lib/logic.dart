@@ -39,6 +39,20 @@ class CardModel {
         return '♠';
     }
   }
+
+  Map<String, dynamic> toJson() => {
+    'suit': suit.index,
+    'rank': rank,
+    'faceUp': faceUp,
+  };
+
+  static CardModel fromJson(Map<String, dynamic> json) {
+    return CardModel(
+      Suit.values[json['suit']],
+      json['rank'],
+      faceUp: json['faceUp'],
+    );
+  }
 }
 
 class SolitaireGame {
@@ -172,5 +186,27 @@ class SolitaireGame {
 
   bool isWin() {
     return foundations.every((f) => f.length == 13);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'deck': deck.map((c) => c.toJson()).toList(),
+    'tableau': tableau.map((pile) => pile.map((c) => c.toJson()).toList()).toList(),
+    'foundations': foundations.map((pile) => pile.map((c) => c.toJson()).toList()).toList(),
+    'stock': stock.map((c) => c.toJson()).toList(),
+    'waste': waste.map((c) => c.toJson()).toList(),
+  };
+
+  static SolitaireGame fromJson(Map<String, dynamic> json) {
+    SolitaireGame game = SolitaireGame();
+    game.deck = (json['deck'] as List).map((c) => CardModel.fromJson(c)).toList();
+    game.tableau = (json['tableau'] as List)
+        .map((pile) => (pile as List).map((c) => CardModel.fromJson(c)).toList())
+        .toList();
+    game.foundations = (json['foundations'] as List)
+        .map((pile) => (pile as List).map((c) => CardModel.fromJson(c)).toList())
+        .toList();
+    game.stock = (json['stock'] as List).map((c) => CardModel.fromJson(c)).toList();
+    game.waste = (json['waste'] as List).map((c) => CardModel.fromJson(c)).toList();
+    return game;
   }
 }
