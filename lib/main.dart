@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'play.dart';
 import 'statistics.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MainApp());
@@ -32,7 +33,7 @@ class _MainAppState extends State<MainApp> {
     },
     {
       'title': 'statistics',
-      'subtitle': 'check your progress',
+      'subtitle': 'game history and more',
       'icon': 'assets/icons/stats1.svg',
     },
   ];
@@ -101,7 +102,7 @@ class _MainAppState extends State<MainApp> {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 80.0),
                         child: SizedBox(
-                          height: 200,
+                          height: 230,
                           child: PageView.builder(
                             controller: _pageController,
                             itemCount: options.length,
@@ -113,6 +114,16 @@ class _MainAppState extends State<MainApp> {
                             itemBuilder: (context, index) {
                               final option = options[index];
                               final isSelected = index == _currentPage;
+                              final colorOptions = [
+                                [Colors.redAccent, Colors.orangeAccent],
+                                [Colors.pinkAccent, Colors.redAccent],
+                                [Colors.blue, Colors.lightBlueAccent],
+                              ];
+                              final glowOptions = [
+                                Colors.orange,
+                                Colors.pink,
+                                Colors.blue,
+                              ];
                               return Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 6.0),
                                 child: GestureDetector(
@@ -150,17 +161,18 @@ class _MainAppState extends State<MainApp> {
                                       width: screenWidth * 0.9,
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(20),
-                                        gradient: const LinearGradient(
-                                          colors: [Colors.purpleAccent, Colors.pinkAccent],
+                                        gradient: LinearGradient(
+                                          colors: colorOptions[index],
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
                                         ),
                                         boxShadow: isSelected
                                             ? [
                                                 BoxShadow(
-                                                  color: Colors.pinkAccent.withOpacity(0.6),
+                                                  color: glowOptions[index].withOpacity(0.8),
                                                   blurRadius: 15,
-                                                  offset: const Offset(0, 6),
+                                                  spreadRadius: -2,
+                                                  offset: const Offset(0, 0),
                                                 )
                                               ]
                                             : null,
@@ -187,6 +199,7 @@ class _MainAppState extends State<MainApp> {
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 20,
+                                              fontFamily: 'CabinetGrotesk',
                                               fontWeight: FontWeight.bold,
                                               shadows: isSelected
                                                   ? [const Shadow(blurRadius: 5, color: Colors.white, offset: Offset(0, 0))]
@@ -198,6 +211,7 @@ class _MainAppState extends State<MainApp> {
                                             option['subtitle']!,
                                             style: const TextStyle(
                                               color: Colors.white70,
+                                              fontFamily: 'CabinetGrotesk',
                                               fontSize: 14,
                                               fontWeight: FontWeight.w300,
                                             ),
@@ -215,13 +229,22 @@ class _MainAppState extends State<MainApp> {
                     ],
                   ),
                 ),
-                const Center(
-                  child: Text(
-                    'by will murphy',
-                    style: TextStyle(
-                      color: Colors.white24,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w300,
+                GestureDetector(
+                  onTap: () async {
+                    final url = Uri.parse('https://www.w-murphy.com');
+                    if (await canLaunchUrl(url)) {
+                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: const Center(
+                    child: Text(
+                      'by will murphy',
+                      style: TextStyle(
+                        color: Colors.white30,
+                        fontFamily: 'CabinetGrotesk',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
                 ),

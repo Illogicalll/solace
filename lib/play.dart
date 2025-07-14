@@ -20,7 +20,7 @@ class PlayPage extends StatefulWidget {
   State<PlayPage> createState() => _PlayPageState();
 }
 
-class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
+class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, TickerProviderStateMixin {
   SolitaireGame? _game;
   int? _draggingPileIndex;
   int? _draggingCardIndex;
@@ -31,6 +31,9 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
   Duration _elapsed = Duration.zero;
   DateTime? _pauseTime;
   Ticker? _ticker;
+
+  // Track which cards are being flipped for animation
+  Map<String, AnimationController> _flipControllers = {};
 
   @override
   void initState() {
@@ -45,6 +48,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    // Dispose all flip controllers
+    for (var controller in _flipControllers.values) {
+      controller.dispose();
+    }
     _saveGameState();
     _pauseTimer();
     WidgetsBinding.instance.removeObserver(this);
@@ -171,6 +178,42 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
     }
   }
 
+  // Helper to generate a unique key for a card
+  String _cardKey(int pileIndex, int cardIndex) => '$pileIndex-$cardIndex';
+
+  // Wrap move logic to trigger flip animation
+  void _moveTableauToTableau(int fromPile, int cardIndex, int toPile) {
+    _game!.moveTableauToTableau(fromPile, cardIndex, toPile);
+    _triggerFlipIfNeeded(fromPile);
+  }
+
+  void _moveTableauToFoundation(int fromPile, int foundationIndex) {
+    _game!.moveTableauToFoundation(fromPile, foundationIndex);
+    _triggerFlipIfNeeded(fromPile);
+  }
+
+  void _triggerFlipIfNeeded(int pileIndex) {
+    final pile = _game!.tableau[pileIndex];
+    if (pile.isNotEmpty && pile.last.faceUp) {
+      final cardIndex = pile.length - 1;
+      final key = _cardKey(pileIndex, cardIndex);
+      // Only animate if not already animating
+      if (!_flipControllers.containsKey(key)) {
+        final controller = AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 350),
+        );
+        _flipControllers[key] = controller;
+        controller.forward().then((_) {
+          controller.dispose();
+          _flipControllers.remove(key);
+          setState(() {}); // Refresh after animation
+        });
+        setState(() {});
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_game == null) {
@@ -258,7 +301,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(6),
                 ),
               )
-            : _buildCardBack(),
+            : Material(
+                color: Colors.transparent, // Prevent yellow highlight
+                child: _buildCardBack(),
+              ),
       ),
     );
   }
@@ -284,7 +330,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
               children: [
                 // Show the next card in the waste if dragging the top card
                 if (isDraggingWasteTop && _game!.waste.length > 1)
-                  _buildCard(_game!.waste[_game!.waste.length - 2]),
+                  Material(
+                    color: Colors.transparent,
+                    child: _buildCard(_game!.waste[_game!.waste.length - 2]),
+                  ),
                 if (isDraggingWasteTop && _game!.waste.length == 1)
                   Container(
                     decoration: BoxDecoration(
@@ -295,9 +344,15 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
                 if (!isDraggingWasteTop)
                   Draggable<CardModel>(
                     data: _game!.waste.last,
-                    feedback: _buildCard(_game!.waste.last),
+                    feedback: Material(
+                      color: Colors.transparent,
+                      child: _buildCard(_game!.waste.last),
+                    ),
                     childWhenDragging: Container(),
-                    child: _buildCard(_game!.waste.last),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: _buildCard(_game!.waste.last),
+                    ),
                     onDragStarted: () {
                       setState(() {
                         _draggingPileIndex = -2; // -2 for waste
@@ -366,13 +421,13 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
             } else {
               for (int i = 0; i < 7; i++) {
                 if (_game!.tableau[i].contains(data)) {
-                  _game!.moveTableauToFoundation(i, index);
+                  _moveTableauToFoundation(i, index);
                   break;
                 }
               }
             }
           } else if (data is DragData) {
-            _game!.moveTableauToFoundation(data.pileIndex, index);
+            _moveTableauToFoundation(data.pileIndex, index);
           }
           _incrementMove();
           _checkWin();
@@ -392,15 +447,24 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
               : Stack(
                   children: [
                     if (isDraggingThisFoundation && pile.length > 1)
-                      _buildCard(pile[pile.length - 2]),
+                      Material(
+                        color: Colors.transparent,
+                        child: _buildCard(pile[pile.length - 2]),
+                      ),
                     if (isDraggingThisFoundation && pile.length == 1)
                       const SizedBox(),
                     if (!isDraggingThisFoundation)
                       Draggable<DragData>(
                         data: DragData(pile.last, -1, -1),
-                        feedback: _buildCard(pile.last),
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: _buildCard(pile.last),
+                        ),
                         childWhenDragging: Container(),
-                        child: _buildCard(pile.last),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: _buildCard(pile.last),
+                        ),
                         onDragStarted: () {
                           setState(() {
                             _draggingPileIndex = index;
@@ -485,13 +549,13 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
             if (data.pileIndex == -1) {
               _game!.moveFoundationToTableau(data.card, index);
             } else {
-              _game!.moveTableauToTableau(data.pileIndex, data.cardIndex, index);
+              _moveTableauToTableau(data.pileIndex, data.cardIndex, index);
             }
           } else if (data is CardModel) {
             for (int i = 0; i < 7; i++) {
               if (_game!.tableau[i].contains(data)) {
                 final cardIndex = _game!.tableau[i].indexOf(data);
-                _game!.moveTableauToTableau(i, cardIndex, index);
+                _moveTableauToTableau(i, cardIndex, index);
                 return;
               }
             }
@@ -513,12 +577,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
                     width: width,
                     child: (_isDragging && _draggingPileIndex == index && _draggingCardIndex != -1 && i >= _draggingCardIndex!)
                         ? Container()
-                        : _buildDraggableCard(
-                            pile[i],
-                            pileIndex: index,
-                            cardIndex: i,
-                            pile: pile,
-                          ),
+                        : _buildAnimatedTableauCard(pile[i], index, i, pile),
                   ),
                 ),
               if (pile.isEmpty ||
@@ -540,6 +599,42 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildAnimatedTableauCard(CardModel card, int pileIndex, int cardIndex, List<CardModel> pile) {
+    final key = _cardKey(pileIndex, cardIndex);
+    final controller = _flipControllers[key];
+    if (controller != null) {
+      return AnimatedBuilder(
+        animation: controller,
+        builder: (context, child) {
+          final value = controller.value;
+          final angle = value * 3.14159;
+          if (value < 0.5) {
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.001)
+                ..rotateY(angle),
+              child: _buildCardBack(),
+            );
+          } else {
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.001)
+                ..rotateY(3.14159 - angle),
+              child: _buildCard(card),
+            );
+          }
+        },
+      );
+    }
+    return _buildDraggableCard(card,
+      pileIndex: pileIndex,
+      cardIndex: cardIndex,
+      pile: pile,
+    );
+  }
+
   Widget _buildDraggableCard(CardModel card,
       {required int pileIndex, required int cardIndex, required List<CardModel> pile}) {
     if (!card.faceUp) {
@@ -548,7 +643,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
 
     return Draggable<DragData>(
       data: DragData(card, pileIndex, cardIndex),
-      feedback: _buildMultiCardFeedback(pileIndex, cardIndex),
+      feedback: Material(
+        color: Colors.transparent, // Prevent yellow highlight
+        child: _buildMultiCardFeedback(pileIndex, cardIndex),
+      ),
       childWhenDragging: Container(),
       child: _buildCard(card),
       onDragStarted: () {
