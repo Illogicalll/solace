@@ -184,21 +184,22 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        automaticallyImplyLeading: false, // Remove back button
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             SizedBox(
               width: 90,
               child: Text(
                 'Moves: $_moveCount',
-                textAlign: TextAlign.right,
+                textAlign: TextAlign.left,
                 style: const TextStyle(
                   fontSize: 18,
                   color: Colors.white,
+                  overflow: TextOverflow.visible
                 ),
               ),
             ),
-            const SizedBox(width: 34),
             SizedBox(
               width: 90,
               child: Text(
@@ -214,13 +215,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver {
           ],
         ),
         centerTitle: true,
-        backgroundColor: Colors.black,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _resetGame,
-          )
-        ],
+        backgroundColor: Colors.black
       ),
       body: Column(
         children: [
