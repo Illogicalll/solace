@@ -25,30 +25,53 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   int? _draggingPileIndex;
   int? _draggingCardIndex;
   bool _isDragging = false;
-
   int _moveCount = 0;
+  int _score = 0;
+  int _stockCycles = 1;
+  int _foundationStreak = 0;
   late DateTime _startTime;
   Duration _elapsed = Duration.zero;
   DateTime? _pauseTime;
+  int _lastScoreDeductionTime = 0;
   Ticker? _ticker;
+  final Map<String, AnimationController> _flipControllers = {};
+  bool _isAutoCompleting = false;
 
-  // Track which cards are being flipped for animation
-  Map<String, AnimationController> _flipControllers = {};
+  final List<Map<String, dynamic>> _gameHistory = [];
+
+  AnimationController? _glowController;
+  Animation<double>? _glowAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _moveCount = 0;
+    _score = 0;
+    _stockCycles = 1;
+    _foundationStreak = 0;
     _startTime = DateTime.now();
     _elapsed = Duration.zero;
+    _lastScoreDeductionTime = 0;
     _ticker = Ticker(_updateTimer);
+
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _glowAnimation = Tween<double>(begin: 2.0, end: 5.0).animate(
+      CurvedAnimation(
+        parent: _glowController!,
+        curve: Curves.easeInOut,
+      ),
+    );
+    
     _restoreGameState();
   }
 
   @override
   void dispose() {
-    // Dispose all flip controllers
     for (var controller in _flipControllers.values) {
       controller.dispose();
     }
@@ -56,6 +79,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     _pauseTimer();
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.dispose();
+    _glowController?.dispose();
     super.dispose();
   }
 
@@ -89,12 +113,18 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString('solace_game_state');
     final moveCount = prefs.getInt('solace_move_count');
+    final score = prefs.getInt('solace_score');
+    final stockCycles = prefs.getInt('solace_stock_cycles');
+    final foundationStreak = prefs.getInt('solace_foundation_streak');
     final elapsedMillis = prefs.getInt('solace_elapsed_time');
-
+    final lastScoreDeductionTime = prefs.getInt('solace_last_deduction_time');
     if (saved != null) {
       setState(() {
         _game = SolitaireGame.fromJson(jsonDecode(saved));
         _moveCount = moveCount ?? 0;
+        _score = score ?? 0;
+        _stockCycles = stockCycles ?? 1;
+        _foundationStreak = foundationStreak ?? 0;
         if (elapsedMillis != null) {
           _elapsed = Duration(milliseconds: elapsedMillis);
           _startTime = DateTime.now().subtract(_elapsed);
@@ -102,23 +132,49 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
           _startTime = DateTime.now();
           _elapsed = Duration.zero;
         }
+        _lastScoreDeductionTime = lastScoreDeductionTime ?? 0;
       });
     } else {
       setState(() {
         _game = SolitaireGame();
+        _moveCount = 0;
+        _score = 0;
+        _stockCycles = 1;
+        _foundationStreak = 0;
         _startTime = DateTime.now();
         _elapsed = Duration.zero;
+        _lastScoreDeductionTime = 0;
       });
     }
+
+    if (_game != null) {
+      _saveInitialStateToHistory();
+    }
+    
     _ticker?.start();
   }
 
+  void _saveInitialStateToHistory() {
+    _gameHistory.clear();
+    _gameHistory.add({
+      'gameState': _game!.toJson(),
+      'score': _score,
+      'moveCount': _moveCount,
+      'stockCycles': _stockCycles,
+      'foundationStreak': _foundationStreak,
+    });
+  }
+  
   Future<void> _saveGameState() async {
     if (_game != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('solace_game_state', jsonEncode(_game!.toJson()));
       await prefs.setInt('solace_move_count', _moveCount);
       await prefs.setInt('solace_elapsed_time', _elapsed.inMilliseconds);
+      await prefs.setInt('solace_score', _score);
+      await prefs.setInt('solace_stock_cycles', _stockCycles);
+      await prefs.setInt('solace_foundation_streak', _foundationStreak);
+      await prefs.setInt('solace_last_deduction_time', _lastScoreDeductionTime);
     }
   }
 
@@ -127,12 +183,105 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     await prefs.remove('solace_game_state');
     await prefs.remove('solace_move_count');
     await prefs.remove('solace_elapsed_time');
+    await prefs.remove('solace_score');
+    await prefs.remove('solace_stock_cycles');
+    await prefs.remove('solace_foundation_streak');
+    await prefs.remove('solace_last_deduction_time');
   }
 
   void _updateTimer(Duration _) {
     setState(() {
       _elapsed = DateTime.now().difference(_startTime);
+      int currentSeconds = _elapsed.inSeconds;
+      int lastDeductionInterval = (_lastScoreDeductionTime / 10).floor() * 10;
+      int currentInterval = (currentSeconds / 10).floor() * 10;
+      
+      if (currentInterval > lastDeductionInterval) {
+        int intervalsToDeduct = (currentInterval - lastDeductionInterval) ~/ 10;
+        if (intervalsToDeduct > 0) {
+          _score = (_score - (5 * intervalsToDeduct)).clamp(0, double.infinity).toInt();
+          _lastScoreDeductionTime = currentInterval;
+        }
+      }
     });
+  }
+
+  void _scoreWasteToTableau() {
+    setState(() {
+      _score += 5;
+      _foundationStreak = 0;
+    });
+  }
+
+  void _scoreToFoundation() {
+    setState(() {
+      _foundationStreak++;
+      int streakBonus = _foundationStreak > 1 ? 5 : 0;
+      _score += 10 + streakBonus;
+    });
+  }
+
+  void _scoreFromFoundation() {
+    setState(() {
+      _score = (_score - 10).clamp(0, double.infinity).toInt();
+      _foundationStreak = 0;
+    });
+  }
+
+  void _scoreStockCycle() {
+    if (_stockCycles > 1) {
+      setState(() {
+        _score = (_score - 50).clamp(0, double.infinity).toInt();
+      });
+    }
+    _stockCycles++;
+  }
+
+  void _saveToHistory() {
+    if (_game != null) {
+      _gameHistory.add({
+        'gameState': _game!.toJson(),
+        'score': _score,
+        'moveCount': _moveCount,
+        'stockCycles': _stockCycles,
+        'foundationStreak': _foundationStreak,
+      });
+      if (_gameHistory.length > 50) {
+        _gameHistory.removeAt(0);
+      }
+    }
+  }
+
+  void _undoMove() {
+    if (_gameHistory.isEmpty) return;
+    
+    final lastState = _gameHistory.removeLast();
+    
+    setState(() {
+      _game = SolitaireGame.fromJson(lastState['gameState']);
+      _score = lastState['score'];
+      _stockCycles = lastState['stockCycles'];
+      _foundationStreak = lastState['foundationStreak'];
+      _moveCount++;
+    });
+    
+    _saveGameState();
+    if (_gameHistory.isEmpty) {
+      _saveInitialStateToHistory();
+    }
+  }
+  void _moveTableauToTableau(int fromPile, int cardIndex, int toPile) {
+    _game!.moveTableauToTableau(fromPile, cardIndex, toPile);
+    _triggerFlipIfNeeded(fromPile);
+    _foundationStreak = 0;
+    _saveGameState();
+  }
+
+  void _moveTableauToFoundation(int fromPile, int foundationIndex) {
+    _game!.moveTableauToFoundation(fromPile, foundationIndex);
+    _triggerFlipIfNeeded(fromPile);
+    _scoreToFoundation();
+    _saveGameState();
   }
 
   void _incrementMove() {
@@ -141,28 +290,139 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     });
     _saveGameState();
   }
+  
+  void _autoCompleteGame() {
+    if (_game == null) return;
+
+    setState(() {
+      _isAutoCompleting = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 100), () => _processNextAutoCompleteMove());
+  }
+
+  void _processNextAutoCompleteMove() {
+    if (_game == null || !_isAutoCompleting) return;
+    
+    bool moveMade = false;
+
+    for (int pileIndex = 0; pileIndex < _game!.tableau.length; pileIndex++) {
+      var pile = _game!.tableau[pileIndex];
+      if (pile.isEmpty) continue;
+      
+      var card = pile.last;
+
+      for (int foundationIndex = 0; foundationIndex < _game!.foundations.length; foundationIndex++) {
+        if (_game!.canPlaceOnFoundation(card, _game!.foundations[foundationIndex])) {
+          _moveTableauToFoundation(pileIndex, foundationIndex);
+          _incrementMove();
+          moveMade = true;
+          break;
+        }
+      }
+      
+      if (moveMade) break;
+    }
+    
+    if (!moveMade && _game!.waste.isNotEmpty) {
+      var card = _game!.waste.last;
+      
+      for (int foundationIndex = 0; foundationIndex < _game!.foundations.length; foundationIndex++) {
+        if (_game!.canPlaceOnFoundation(card, _game!.foundations[foundationIndex])) {
+          setState(() {
+            _game!.moveWasteToFoundation(foundationIndex);
+            _scoreToFoundation();
+          });
+          _incrementMove();
+          moveMade = true;
+          break;
+        }
+      }
+    }
+
+    if (!moveMade && !_game!.stock.isEmpty) {
+      setState(() {
+        _game!.drawFromStock();
+      });
+      _incrementMove();
+      moveMade = true;
+    }
+
+    if (!moveMade && _game!.stock.isEmpty && _game!.waste.isNotEmpty) {
+      setState(() {
+        _scoreStockCycle();
+        _game!.drawFromStock();
+      });
+      _incrementMove();
+      moveMade = true;
+    }
+ 
+    if (_game!.isWin()) {
+      setState(() {
+        _isAutoCompleting = false;
+      });
+      _checkWin();
+      return;
+    }
+
+    if (moveMade) {
+      Future.delayed(const Duration(milliseconds: 150), () => _processNextAutoCompleteMove());
+    } else {
+      setState(() {
+        _isAutoCompleting = false;
+      });
+    }
+  }
 
   void _resetGame() {
     setState(() {
       _game = SolitaireGame();
       _moveCount = 0;
+      _score = 0;
+      _stockCycles = 1;
+      _foundationStreak = 0;
       _startTime = DateTime.now();
       _elapsed = Duration.zero;
       _pauseTime = null;
+      _lastScoreDeductionTime = 0;
+      _revealedCards.clear();
+      _isAutoCompleting = false;
+      _gameHistory.clear();
     });
+
+    _saveInitialStateToHistory();
+    
+    _glowController?.repeat(reverse: true);
     _clearGameState();
     _ticker?.start();
   }
 
   void _checkWin() {
     if (_game != null && _game!.isWin()) {
+      _pauseTimer();
       Future.microtask(() {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: const Text('Congratulations!'),
-            content: const Text('You have beaten the game!'),
+            title: const Text(
+              'Congratulations!',
+              style: TextStyle(
+                color: Colors.black,
+                fontFamily: 'CabinetGrotesk',
+                fontSize: 32,
+                fontWeight: FontWeight.w200,
+              ),
+            ),
+            content: Text(
+              'Score: $_score',
+              style: const TextStyle(
+                color: Colors.black,
+                fontFamily: 'CabinetGrotesk',
+                fontSize: 32,
+                fontWeight: FontWeight.w200,
+              ),
+            ),
             actions: [
               TextButton(
                 onPressed: () {
@@ -178,42 +438,56 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     }
   }
 
-  // Helper to generate a unique key for a card
   String _cardKey(int pileIndex, int cardIndex) => '$pileIndex-$cardIndex';
-
-  // Wrap move logic to trigger flip animation
-  void _moveTableauToTableau(int fromPile, int cardIndex, int toPile) {
-    _game!.moveTableauToTableau(fromPile, cardIndex, toPile);
-    _triggerFlipIfNeeded(fromPile);
-  }
-
-  void _moveTableauToFoundation(int fromPile, int foundationIndex) {
-    _game!.moveTableauToFoundation(fromPile, foundationIndex);
-    _triggerFlipIfNeeded(fromPile);
-  }
 
   void _triggerFlipIfNeeded(int pileIndex) {
     final pile = _game!.tableau[pileIndex];
     if (pile.isNotEmpty && pile.last.faceUp) {
-      final cardIndex = pile.length - 1;
-      final key = _cardKey(pileIndex, cardIndex);
-      // Only animate if not already animating
-      if (!_flipControllers.containsKey(key)) {
-        final controller = AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 350),
-        );
-        _flipControllers[key] = controller;
-        controller.forward().then((_) {
-          controller.dispose();
-          _flipControllers.remove(key);
-          setState(() {}); // Refresh after animation
-        });
-        setState(() {});
+      final card = pile.last;
+      if (!_revealedCards.contains(card)) {
+        _revealedCards.add(card);
+        
+        final cardIndex = pile.length - 1;
+        final key = _cardKey(pileIndex, cardIndex);
+        if (!_flipControllers.containsKey(key)) {
+          final controller = AnimationController(
+            vsync: this,
+            duration: const Duration(milliseconds: 350),
+          );
+          _flipControllers[key] = controller;
+          controller.forward().then((_) {
+            controller.dispose();
+            _flipControllers.remove(key);
+            setState(() {});
+          });
+          setState(() {});
+        }
       }
     }
   }
 
+  final Set<CardModel> _revealedCards = {};
+
+  bool _allTableauCardsFaceUp() {
+    if (_game == null) return false;
+    for (final pile in _game!.tableau) {
+      for (final card in pile) {
+        if (!card.faceUp) return false;
+      }
+    }
+    return true;
+  }
+
+  bool _canUndo() {
+    if (_gameHistory.isEmpty) return false;
+
+    if (_gameHistory.length <= 1) {
+      return false;
+    }
+    
+    return true;
+  }
+  
   @override
   Widget build(BuildContext context) {
     if (_game == null) {
@@ -227,7 +501,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // Remove back button
+        automaticallyImplyLeading: false,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -236,6 +510,18 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
               child: Text(
                 'Moves: $_moveCount',
                 textAlign: TextAlign.left,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  overflow: TextOverflow.visible
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 90,
+              child: Text(
+                'Score: $_score',
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 18,
                   color: Colors.white,
@@ -260,11 +546,73 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
         centerTitle: true,
         backgroundColor: Colors.black
       ),
-      body: Column(
+      body: Stack(
         children: [
-          _buildTopRow(),
-          const SizedBox(height: 30),
-          _buildTableauRow(),
+          Column(
+            children: [
+              _buildTopRow(),
+              const SizedBox(height: 30),
+              _buildTableauRow(),
+            ],
+          ),
+          if (_allTableauCardsFaceUp() && !_isAutoCompleting)
+            AnimatedBuilder(
+              animation: _glowAnimation!,
+              builder: (context, child) {
+                return Positioned(
+                  bottom: 40,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.greenAccent.withOpacity(0.6),
+                            spreadRadius: _glowAnimation!.value,
+                            blurRadius: _glowAnimation!.value * 2,
+                            offset: const Offset(0, 0),
+                          ),
+                        ],
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _autoCompleteGame,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                        child: const Text(
+                          'Auto-Complete',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+          Positioned(
+            bottom: 40,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'undoButton',
+              onPressed: _canUndo() ? _undoMove : null,
+              backgroundColor: _canUndo() ? Colors.blueAccent : Colors.grey[700],
+              child: const Icon(
+                Icons.undo,
+                color: Colors.white,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -285,11 +633,26 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   Widget _buildStock() {
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _game!.drawFromStock();
-          _incrementMove();
-          _checkWin();
-        });
+        if (_game!.stock.isEmpty && _game!.waste.isNotEmpty) {
+          _saveToHistory();
+
+          setState(() {
+            _scoreStockCycle();
+            _game!.drawFromStock();
+            _moveCount++;
+            _checkWin();
+          });
+          _saveGameState();
+        } else if (!_game!.stock.isEmpty) {
+          _saveToHistory();
+          
+          setState(() {
+            _game!.drawFromStock();
+            _moveCount++;
+            _checkWin();
+          });
+          _saveGameState();
+        }
       },
       child: SizedBox(
         width: 58,
@@ -302,7 +665,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
                 ),
               )
             : Material(
-                color: Colors.transparent, // Prevent yellow highlight
+                color: Colors.transparent,
                 child: _buildCardBack(),
               ),
       ),
@@ -328,7 +691,6 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
             )
           : Stack(
               children: [
-                // Show the next card in the waste if dragging the top card
                 if (isDraggingWasteTop && _game!.waste.length > 1)
                   Material(
                     color: Colors.transparent,
@@ -355,7 +717,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
                     ),
                     onDragStarted: () {
                       setState(() {
-                        _draggingPileIndex = -2; // -2 for waste
+                        _draggingPileIndex = -2;
                         _draggingCardIndex = -1;
                         _isDragging = true;
                       });
@@ -414,10 +776,13 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
         return _game!.canPlaceOnFoundation(card, pile);
       },
       onAccept: (data) {
+        _saveToHistory();
+        
         setState(() {
           if (data is CardModel) {
             if (_game!.waste.isNotEmpty && _game!.waste.last == data) {
               _game!.moveWasteToFoundation(index);
+              _scoreToFoundation();
             } else {
               for (int i = 0; i < 7; i++) {
                 if (_game!.tableau[i].contains(data)) {
@@ -429,9 +794,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
           } else if (data is DragData) {
             _moveTableauToFoundation(data.pileIndex, index);
           }
-          _incrementMove();
+          _moveCount++;
           _checkWin();
         });
+        _saveGameState();
       },
       builder: (context, candidateData, rejectedData) {
         return Container(
@@ -548,6 +914,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
           if (data is DragData) {
             if (data.pileIndex == -1) {
               _game!.moveFoundationToTableau(data.card, index);
+              _scoreFromFoundation();
             } else {
               _moveTableauToTableau(data.pileIndex, data.cardIndex, index);
             }
@@ -561,6 +928,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
             }
             if (_game!.waste.isNotEmpty && _game!.waste.last == data) {
               _game!.moveWasteToTableau(index);
+              _scoreWasteToTableau();
             }
           }
           _incrementMove();
@@ -644,7 +1012,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     return Draggable<DragData>(
       data: DragData(card, pileIndex, cardIndex),
       feedback: Material(
-        color: Colors.transparent, // Prevent yellow highlight
+        color: Colors.transparent,
         child: _buildMultiCardFeedback(pileIndex, cardIndex),
       ),
       childWhenDragging: Container(),
