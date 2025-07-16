@@ -42,6 +42,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   AnimationController? _glowController;
   Animation<double>? _glowAnimation;
 
+  bool _showTimelineSlider = false;
+  int _timelineIndex = -1;
+  Map<String, dynamic>? _originalStateBeforeTimeline;
+  
   @override
   void initState() {
     super.initState();
@@ -237,17 +241,110 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     _stockCycles++;
   }
 
+  void _toggleTimelineSlider() {
+    setState(() {
+      if (!_showTimelineSlider) {
+        _originalStateBeforeTimeline = {
+          'gameState': _game!.toJson(),
+          'score': _score,
+          'moveCount': _moveCount,
+          'stockCycles': _stockCycles,
+          'foundationStreak': _foundationStreak,
+        };
+        _timelineIndex = _gameHistory.length - 1;
+      } else {
+        _originalStateBeforeTimeline = null;
+      }
+      _showTimelineSlider = !_showTimelineSlider;
+    });
+    if (_timelineIndex == -1) {
+      _gameHistory.clear();
+    }
+  }
+
+  void _setTimelinePosition(int index) {    
+    if (index == _gameHistory.length - 1 && _originalStateBeforeTimeline != null) {
+      setState(() {
+        _game = SolitaireGame.fromJson(_originalStateBeforeTimeline!['gameState']);
+        _score = _originalStateBeforeTimeline!['score'];
+        _moveCount = _originalStateBeforeTimeline!['moveCount'];
+        _stockCycles = _originalStateBeforeTimeline!['stockCycles'];
+        _foundationStreak = _originalStateBeforeTimeline!['foundationStreak'];
+        _timelineIndex = index;
+      });
+    } else {
+      final state = _gameHistory[index + 1];
+      setState(() {
+        _game = SolitaireGame.fromJson(state['gameState']);
+        if (state.containsKey('score')) _score = state['score'];
+        if (state.containsKey('stockCycles')) _stockCycles = state['stockCycles'];
+        if (state.containsKey('foundationStreak')) _foundationStreak = state['foundationStreak'];
+        _timelineIndex = index;
+      });
+    }
+  }
+
+  bool _hasCardPositionsChanged(Map<String, dynamic> oldState, Map<String, dynamic> newState) {
+    final oldGame = SolitaireGame.fromJson(oldState);
+    final newGame = SolitaireGame.fromJson(newState);
+
+    for (int i = 0; i < oldGame.tableau.length; i++) {
+      if (oldGame.tableau[i].length != newGame.tableau[i].length) return true;
+      for (int j = 0; j < oldGame.tableau[i].length; j++) {
+        if (oldGame.tableau[i][j].suit != newGame.tableau[i][j].suit || 
+            oldGame.tableau[i][j].rank != newGame.tableau[i][j].rank ||
+            oldGame.tableau[i][j].faceUp != newGame.tableau[i][j].faceUp) {
+          return true;
+        }
+      }
+    }
+
+    for (int i = 0; i < oldGame.foundations.length; i++) {
+      if (oldGame.foundations[i].length != newGame.foundations[i].length) return true;
+    }
+
+    if (oldGame.waste.length != newGame.waste.length) return true;
+    if (oldGame.stock.length != newGame.stock.length) return true;
+    
+    return false;
+  }
+
   void _saveToHistory() {
     if (_game != null) {
-      _gameHistory.add({
+      final newState = {
         'gameState': _game!.toJson(),
         'score': _score,
         'moveCount': _moveCount,
         'stockCycles': _stockCycles,
         'foundationStreak': _foundationStreak,
-      });
-      if (_gameHistory.length > 50) {
-        _gameHistory.removeAt(0);
+      };
+
+      if (_timelineIndex != -1 && _timelineIndex < _gameHistory.length - 1) {
+        _gameHistory.removeRange(_timelineIndex + 1, _gameHistory.length);
+        _timelineIndex = -1;
+      }
+
+      bool shouldAddToHistory = true;
+      if (_gameHistory.isNotEmpty) {
+        final lastState = _gameHistory.last;
+        shouldAddToHistory = _hasCardPositionsChanged(
+          lastState['gameState'] as Map<String, dynamic>, 
+          newState['gameState'] as Map<String, dynamic>
+        );
+      }
+      
+      if (shouldAddToHistory) {
+        _gameHistory.add(newState);
+        if (_gameHistory.length > 50) {
+          _gameHistory.removeAt(0);
+        }
+      } else {
+        if (_gameHistory.isNotEmpty) {
+          _gameHistory.last['score'] = _score;
+          _gameHistory.last['moveCount'] = _moveCount;
+          _gameHistory.last['stockCycles'] = _stockCycles;
+          _gameHistory.last['foundationStreak'] = _foundationStreak;
+        }
       }
     }
   }
@@ -477,16 +574,6 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     }
     return true;
   }
-
-  bool _canUndo() {
-    if (_gameHistory.isEmpty) return false;
-
-    if (_gameHistory.length <= 1) {
-      return false;
-    }
-    
-    return true;
-  }
   
   @override
   Widget build(BuildContext context) {
@@ -599,20 +686,115 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
                 );
               },
             ),
-
           Positioned(
             bottom: 40,
             right: 20,
             child: FloatingActionButton(
               heroTag: 'undoButton',
-              onPressed: _canUndo() ? _undoMove : null,
-              backgroundColor: _canUndo() ? Colors.blueAccent : Colors.grey[700],
+              onPressed: _gameHistory.isNotEmpty ? _undoMove : null,
+              backgroundColor: _gameHistory.isNotEmpty ? Colors.blueAccent : Colors.grey[700],
               child: const Icon(
                 Icons.undo,
                 color: Colors.white,
               ),
             ),
           ),
+          Positioned(
+            bottom: 40,
+            left: 20,
+            child: FloatingActionButton(
+              heroTag: 'timelineButton',
+              onPressed: _gameHistory.isNotEmpty ? _toggleTimelineSlider : null,
+              backgroundColor: _gameHistory.isNotEmpty ? Colors.purple : Colors.grey[700],
+              child: const Icon(
+                Icons.history,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          if (_showTimelineSlider)
+            Positioned(
+              bottom: 110,
+              left: 20,
+              right: 20,
+              child: Card(
+                color: Colors.black.withOpacity(0.85),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.white24),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Move Timeline",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, color: Colors.white),
+                            onPressed: _toggleTimelineSlider,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text("Start", style: TextStyle(color: Colors.white70)),
+                          Expanded(
+                            child: Slider(
+                              value: _timelineIndex.toDouble(),
+                              min: -1,
+                              max: (_gameHistory.length - 1).toDouble(),
+                              divisions: _gameHistory.length > 1 ? _gameHistory.length : 1,
+                              activeColor: Colors.blueAccent,
+                              inactiveColor: Colors.white24,
+                              onChanged: (value) {
+                                _setTimelinePosition(value.round());
+                              },
+                            ),
+                          ),
+                          Text("Current", style: TextStyle(color: Colors.white70)),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.fast_rewind, color: Colors.white),
+                            onPressed: _timelineIndex > -1 ? () => _setTimelinePosition(-1) : null,
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.skip_previous, color: Colors.white),
+                            onPressed: _timelineIndex > -1 ? () => _setTimelinePosition(_timelineIndex - 1) : null,
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.skip_next, color: Colors.white),
+                            onPressed: _timelineIndex < _gameHistory.length - 1
+                              ? () => _setTimelinePosition(_timelineIndex + 1)
+                              : null,
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.fast_forward, color: Colors.white),
+                            onPressed: _timelineIndex < _gameHistory.length - 1
+                              ? () => _setTimelinePosition(_gameHistory.length - 1)
+                              : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -910,6 +1092,8 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
       },
       onAcceptWithDetails: (details) {
         final data = details.data;
+        _saveToHistory();
+        
         setState(() {
           if (data is DragData) {
             if (data.pileIndex == -1) {
