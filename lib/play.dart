@@ -45,6 +45,8 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   bool _showTimelineSlider = false;
   int _timelineIndex = -1;
   Map<String, dynamic>? _originalStateBeforeTimeline;
+
+  bool _currentGameWon = false;
   
   @override
   void initState() {
@@ -472,6 +474,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   }
 
   void _resetGame() {
+    if (_moveCount > 0 && !_currentGameWon) {
+      _recordGameLost();
+    }
+    
     setState(() {
       _game = SolitaireGame();
       _moveCount = 0;
@@ -485,6 +491,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
       _revealedCards.clear();
       _isAutoCompleting = false;
       _gameHistory.clear();
+      _currentGameWon = false;
     });
 
     _saveInitialStateToHistory();
@@ -497,6 +504,9 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   void _checkWin() {
     if (_game != null && _game!.isWin()) {
       _pauseTimer();
+      _currentGameWon = true;
+      _recordGameWon();
+      
       Future.microtask(() {
         showDialog(
           context: context,
@@ -535,7 +545,55 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     }
   }
 
-  String _cardKey(int pileIndex, int cardIndex) => '$pileIndex-$cardIndex';
+    String _cardKey(int pileIndex, int cardIndex) => '$pileIndex-$cardIndex';
+
+  Future<void> _recordGameWon() async {
+    final prefs = await SharedPreferences.getInstance();
+    final gamesWon = prefs.getInt('solace_games_won') ?? 0;
+    await prefs.setInt('solace_games_won', gamesWon + 1);
+
+    await _saveGameToHistory(true);
+  }
+
+  Future<void> _recordGameLost() async {
+    if (_moveCount > 0 && !(_game != null && _game!.isWin())) {
+      final prefs = await SharedPreferences.getInstance();
+      final gamesLost = prefs.getInt('solace_games_lost') ?? 0;
+      await prefs.setInt('solace_games_lost', gamesLost + 1);
+
+      await _saveGameToHistory(false);
+    }
+  }
+  
+  Future<void> _saveGameToHistory(bool isWin) async {
+    if (_game == null) return;
+    
+    final prefs = await SharedPreferences.getInstance();
+    final gameHistoryJson = prefs.getString('solace_games_history') ?? '[]';
+    List<dynamic> gameHistory = [];
+    
+    try {
+      gameHistory = jsonDecode(gameHistoryJson);
+    } catch (e) {
+      print('Error parsing game history: $e');
+    }
+
+    final newGameEntry = {
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'result': isWin ? 'win' : 'loss',
+      'score': _score,
+      'moveCount': _moveCount,
+      'gameState': _game!.toJson(),
+    };
+    
+    gameHistory.insert(0, newGameEntry);
+    
+    if (gameHistory.length > 20) {
+      gameHistory = gameHistory.sublist(0, 20);
+    }
+
+    await prefs.setString('solace_games_history', jsonEncode(gameHistory));
+  }
 
   void _triggerFlipIfNeeded(int pileIndex) {
     final pile = _game!.tableau[pileIndex];

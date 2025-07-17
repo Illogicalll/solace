@@ -4,7 +4,7 @@ enum Suit { hearts, diamonds, clubs, spades }
 
 class CardModel {
   final Suit suit;
-  final int rank; // 1 = Ace, 13 = King
+  final int rank;
   bool faceUp;
 
   CardModel(this.suit, this.rank, {this.faceUp = false});
@@ -169,7 +169,6 @@ class SolitaireGame {
   }
 
   void moveFoundationToTableau(CardModel card, int toPile) {
-    // Find which foundation this card is in
     int foundationIndex = -1;
     for (int i = 0; i < foundations.length; i++) {
       if (foundations[i].isNotEmpty && foundations[i].last == card) {
@@ -178,7 +177,6 @@ class SolitaireGame {
       }
     }
     if (foundationIndex == -1) return;
-    // Check if move is valid
     if (!canPlaceOnTableau(card, tableau[toPile].isNotEmpty ? tableau[toPile].last : null)) return;
     foundations[foundationIndex].removeLast();
     tableau[toPile].add(card);

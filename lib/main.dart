@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'play.dart';
 import 'statistics.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert';
 
 void main() {
   runApp(const MainApp());
@@ -137,6 +138,51 @@ class _MainAppState extends State<MainApp> {
                                         break;
                                       case 'start':
                                         final prefs = await SharedPreferences.getInstance();
+                                        final moveCount = prefs.getInt('solace_move_count') ?? 0;
+                                        final gameState = prefs.getString('solace_game_state');
+                                        if (moveCount > 0 && gameState != null) {
+                                          bool isWin = false;
+                                          try {
+                                            final gameJson = jsonDecode(gameState);
+                                            final foundations = gameJson['foundations'];
+                                            if (foundations is List && foundations.every((f) => (f as List).length == 13)) {
+                                              isWin = true;
+                                            }
+                                          } catch (e) {
+                                            print('Error checking win state: $e');
+                                          }
+                                          
+                                          if (!isWin) {
+                                            final gamesLost = prefs.getInt('solace_games_lost') ?? 0;
+                                            await prefs.setInt('solace_games_lost', gamesLost + 1);
+
+                                            final score = prefs.getInt('solace_score') ?? 0;
+                                            final gameHistoryJson = prefs.getString('solace_games_history') ?? '[]';
+                                            List<dynamic> gameHistory = [];
+                                            try {
+                                              gameHistory = jsonDecode(gameHistoryJson);
+                                            } catch (e) {
+                                              print('Error parsing game history: $e');
+                                            }
+
+                                            final newGameEntry = {
+                                              'timestamp': DateTime.now().millisecondsSinceEpoch,
+                                              'result': 'loss',
+                                              'score': score,
+                                              'moveCount': moveCount,
+                                              'gameState': jsonDecode(gameState),
+                                            };
+                                            
+                                            gameHistory.insert(0, newGameEntry);
+                                            
+                                            if (gameHistory.length > 20) {
+                                              gameHistory = gameHistory.sublist(0, 20);
+                                            }
+                                            
+                                            await prefs.setString('solace_games_history', jsonEncode(gameHistory));
+                                          }
+                                        }
+
                                         await prefs.remove('solace_game_state');
                                         await prefs.remove('solace_move_count');
                                         await prefs.remove('solace_elapsed_time');
