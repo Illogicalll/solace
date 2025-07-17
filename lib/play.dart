@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:solace/logic.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -511,34 +510,92 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text(
-              'Congratulations!',
-              style: TextStyle(
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Colors.white, width: 0.2),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
                 color: Colors.black,
-                fontFamily: 'CabinetGrotesk',
-                fontSize: 32,
-                fontWeight: FontWeight.w200,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'victory!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'CabinetGrotesk',
+                      fontSize: 36,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'score: $_score',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'CabinetGrotesk',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w200,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.5, end: 5.0),
+                    duration: const Duration(seconds: 2),
+                    builder: (context, value, child) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.pinkAccent.withOpacity(0.6),
+                              spreadRadius: value,
+                              blurRadius: value * 2,
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _resetGame();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                              side: const BorderSide(color: Colors.white, width: 1.5),
+                            ),
+                          ),
+                          child: const Text(
+                            'again',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w300,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
-            content: Text(
-              'Score: $_score',
-              style: const TextStyle(
-                color: Colors.black,
-                fontFamily: 'CabinetGrotesk',
-                fontSize: 32,
-                fontWeight: FontWeight.w200,
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _resetGame();
-                },
-                child: const Text('Play Again'),
-              ),
-            ],
           ),
         );
       });
@@ -552,6 +609,11 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
     final gamesWon = prefs.getInt('solace_games_won') ?? 0;
     await prefs.setInt('solace_games_won', gamesWon + 1);
 
+    final currentHighScore = prefs.getInt('solace_high_score') ?? 0;
+    if (_score > currentHighScore) {
+      await prefs.setInt('solace_high_score', _score);
+    }
+
     await _saveGameToHistory(true);
   }
 
@@ -560,6 +622,11 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
       final prefs = await SharedPreferences.getInstance();
       final gamesLost = prefs.getInt('solace_games_lost') ?? 0;
       await prefs.setInt('solace_games_lost', gamesLost + 1);
+
+      final currentHighScore = prefs.getInt('solace_high_score') ?? 0;
+      if (_score > currentHighScore) {
+        await prefs.setInt('solace_high_score', _score);
+      }
 
       await _saveGameToHistory(false);
     }
@@ -1212,7 +1279,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   Widget _buildAnimatedTableauCard(CardModel card, int pileIndex, int cardIndex, List<CardModel> pile) {
     final key = _cardKey(pileIndex, cardIndex);
     final controller = _flipControllers[key];
-    if (controller != null) {
+    if (!_revealedCards.contains(card) && controller != null) {
       return AnimatedBuilder(
         animation: controller,
         builder: (context, child) {
@@ -1372,13 +1439,10 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
         border: Border.all(color: Colors.black),
       ),
       child: Center(
-        child: Opacity(
-          opacity: 0.4,
-          child: SvgPicture.asset(
-            'assets/icons/cardback.svg',
-            width: 48,
-            height: 48,
-          ),
+        child: Image.asset(
+          'assets/icons/cardback.png',
+          width: 80,
+          height: 72
         ),
       ),
     );

@@ -14,6 +14,7 @@ class StatisticsPage extends StatefulWidget {
 class _StatisticsPageState extends State<StatisticsPage> {
   int gamesWon = 0;
   int gamesLost = 0;
+  int highScore = 0;
   bool isLoading = true;
   List<Map<String, dynamic>> recentGames = [];
 
@@ -28,6 +29,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final won = prefs.getInt('solace_games_won') ?? 0;
     final lost = prefs.getInt('solace_games_lost') ?? 0;
 
+    // Load high score from persistent storage
+    final storedHighScore = prefs.getInt('solace_high_score') ?? 0;
+
     final gamesHistoryJson = prefs.getString('solace_games_history') ?? '[]';
     List<dynamic> gamesHistoryList = [];
     try {
@@ -39,6 +43,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     setState(() {
       gamesWon = won;
       gamesLost = lost;
+      highScore = storedHighScore;
       recentGames = List<Map<String, dynamic>>.from(gamesHistoryList);
       isLoading = false;
     });
@@ -55,7 +60,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
           style: TextStyle(
             color: Colors.white,
             fontFamily: 'CabinetGrotesk',
-            fontWeight: FontWeight.w300,
+            fontWeight: FontWeight.w400,
           ),
         ),
         backgroundColor: Colors.black,
@@ -68,6 +73,30 @@ class _StatisticsPageState extends State<StatisticsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Column(
+                      children: [
+                        const Text(
+                          'high score',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 18,
+                            fontFamily: 'CabinetGrotesk',
+                          ),
+                        ),
+                        Text(
+                          '$highScore',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'CabinetGrotesk',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   SizedBox(
                     height: 200,
@@ -78,11 +107,12 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   _buildStatsList(),
                   const SizedBox(height: 20),
                   const Text(
-                    'Recent Games',
+                    'recent games',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
+                      fontFamily: 'CabinetGrotesk',
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -99,7 +129,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     if (total == 0) {
       return const Center(
         child: Text(
-          'No games played yet',
+          'no games played yet',
           style: TextStyle(color: Colors.white70, fontSize: 18),
         )
       );
@@ -146,13 +176,13 @@ class _StatisticsPageState extends State<StatisticsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         children: [
-          _buildStatRow('Games Won', gamesWon.toString(), Colors.green),
+          _buildStatRow('games won', gamesWon.toString(), Colors.green),
           const SizedBox(height: 10),
-          _buildStatRow('Games Lost', gamesLost.toString(), Colors.red),
+          _buildStatRow('games lost', gamesLost.toString(), Colors.red),
           const SizedBox(height: 10),
-          _buildStatRow('Total Games', (gamesWon + gamesLost).toString(), Colors.blue),
+          _buildStatRow('total games', (gamesWon + gamesLost).toString(), Colors.blue),
           const SizedBox(height: 10),
-          _buildStatRow('Win Rate', '$winRate%', Colors.amber),
+          _buildStatRow('win rate', '$winRate%', Colors.amber),
         ],
       ),
     );
@@ -223,12 +253,12 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 color: isWin ? Colors.green : Colors.red,
               ),
               child: Icon(
-                isWin ? Icons.check : Icons.close,
+                isWin ? Icons.emoji_events : Icons.close,
                 color: Colors.white,
               ),
             ),
             title: Text(
-              isWin ? 'Victory!' : 'Defeat',
+              isWin ? 'victory' : 'defeat',
               style: TextStyle(
                 color: isWin ? Colors.green : Colors.red,
                 fontWeight: FontWeight.bold,
@@ -239,7 +269,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
               style: const TextStyle(color: Colors.white70),
             ),
             trailing: Text(
-              'Score: $score',
+              'score: $score',
               style: const TextStyle(color: Colors.white),
             ),
             onTap: () {

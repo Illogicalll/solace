@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'logic.dart';
 
 class GameDetailView extends StatelessWidget {
@@ -29,7 +28,7 @@ class GameDetailView extends StatelessWidget {
           style: TextStyle(
             color: Colors.white,
             fontFamily: 'CabinetGrotesk',
-            fontWeight: FontWeight.w300,
+            fontWeight: FontWeight.w400,
           ),
         ),
         backgroundColor: Colors.black,
@@ -59,7 +58,7 @@ class GameDetailView extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Score: $score',
+                            'score: $score',
                             style: const TextStyle(
                               color: Colors.white, 
                               fontSize: 18, 
@@ -96,7 +95,7 @@ class GameDetailView extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               const Text(
-                'Final State',
+                'final state',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 20,
@@ -257,12 +256,15 @@ class GameDetailView extends StatelessWidget {
             ),
           ),
           Center(
-            child: Text(
-              card.suitSymbol,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 24,
-                color: card.color,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Text(
+                card.suitSymbol,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                  color: card.color,
+                ),
               ),
             ),
           ),
@@ -281,13 +283,10 @@ class GameDetailView extends StatelessWidget {
         border: Border.all(color: Colors.black),
       ),
       child: Center(
-        child: Opacity(
-          opacity: 0.4,
-          child: SvgPicture.asset(
-            'assets/icons/cardback.svg',
-            width: 36,
-            height: 36,
-          ),
+        child: Image.asset(
+          'assets/icons/cardback.png',
+          width: 50,
+          height: 59
         ),
       ),
     );
@@ -357,13 +356,10 @@ class GameDetailView extends StatelessWidget {
         border: Border.all(color: Colors.black),
       ),
       child: Center(
-        child: Opacity(
-          opacity: 0.4,
-          child: SvgPicture.asset(
-            'assets/icons/cardback.svg',
-            width: 48,
-            height: 48,
-          ),
+        child: Image.asset(
+          'assets/icons/cardback.png',
+          width: 80,
+          height: 72
         ),
       ),
     );

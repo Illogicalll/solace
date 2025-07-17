@@ -157,6 +157,12 @@ class _MainAppState extends State<MainApp> {
                                             await prefs.setInt('solace_games_lost', gamesLost + 1);
 
                                             final score = prefs.getInt('solace_score') ?? 0;
+
+                                            final currentHighScore = prefs.getInt('solace_high_score') ?? 0;
+                                            if (score > currentHighScore) {
+                                              await prefs.setInt('solace_high_score', score);
+                                            }
+                                            
                                             final gameHistoryJson = prefs.getString('solace_games_history') ?? '[]';
                                             List<dynamic> gameHistory = [];
                                             try {
