@@ -70,38 +70,39 @@ class _MainAppState extends State<MainApp> {
       home: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 12.0, right: 12.0),
-            child: Column(
+          child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Align(
-                  alignment: Alignment.topLeft,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 32.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'solace',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'CabinetGrotesk',
-                            fontSize: 72,
-                            fontWeight: FontWeight.w200,
+                Padding(
+                  padding: const EdgeInsets.only(left: 12.0, right: 12.0),
+                  child: const Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 32.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'solace',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'CabinetGrotesk',
+                              fontSize: 72,
+                              fontWeight: FontWeight.w200,
+                            ),
                           ),
-                        ),
-                        Text(
-                          ' welcome back',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'CabinetGrotesk',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w100,
-                            height: 0.5,
+                          Text(
+                            ' welcome back',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'CabinetGrotesk',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w200,
+                              height: 0.5,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -312,7 +313,6 @@ class _MainAppState extends State<MainApp> {
             ),
           ),
         ),
-      ),
     );
   }
 }
