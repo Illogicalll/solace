@@ -501,7 +501,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   }
 
   void _checkWin() {
-    // if (_game != null && _game!.isWin()) {
+    if (_game != null && _game!.isWin()) {
       _pauseTimer();
       _currentGameWon = true;
       _recordGameWon();
@@ -627,7 +627,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
           ),
         );
       });
-    // }
+    }
   }
 
     String _cardKey(int pileIndex, int cardIndex) => '$pileIndex-$cardIndex';
