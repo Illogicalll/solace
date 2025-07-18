@@ -501,7 +501,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
   }
 
   void _checkWin() {
-    if (_game != null && _game!.isWin()) {
+    // if (_game != null && _game!.isWin()) {
       _pauseTimer();
       _currentGameWon = true;
       _recordGameWon();
@@ -552,46 +552,74 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
                     ),
                   ),
                   const SizedBox(height: 30),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0.5, end: 5.0),
-                    duration: const Duration(seconds: 2),
-                    builder: (context, value, child) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.pinkAccent.withOpacity(0.6),
-                              spreadRadius: value,
-                              blurRadius: value * 2,
-                            ),
-                          ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).pushReplacementNamed('/');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                            side: const BorderSide(color: Colors.white70, width: 1.5),
+                          ),
                         ),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _resetGame();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                            shape: RoundedRectangleBorder(
+                        child: const Text(
+                          'home',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w300,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0.5, end: 5.0),
+                        duration: const Duration(seconds: 2),
+                        builder: (context, value, child) {
+                          return Container(
+                            decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(30),
-                              side: const BorderSide(color: Colors.white, width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.pinkAccent.withOpacity(0.6),
+                                  spreadRadius: value,
+                                  blurRadius: value * 2,
+                                ),
+                              ],
                             ),
-                          ),
-                          child: const Text(
-                            'again',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w300,
-                              color: Colors.white,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _resetGame();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  side: const BorderSide(color: Colors.white, width: 1.5),
+                                ),
+                              ),
+                              child: const Text(
+                                'again',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w300,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      );
-                    },
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -599,7 +627,7 @@ class _PlayPageState extends State<PlayPage> with WidgetsBindingObserver, Ticker
           ),
         );
       });
-    }
+    // }
   }
 
     String _cardKey(int pileIndex, int cardIndex) => '$pileIndex-$cardIndex';
